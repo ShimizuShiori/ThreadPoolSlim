@@ -5,6 +5,8 @@ VisualStudioVersion = 17.1.32421.90
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Reface.ThreadPoolSlim", "Reface.ThreadPoolSlim\Reface.ThreadPoolSlim.csproj", "{0316038D-99B4-42F2-B299-F540C83A4A41}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Reface.ThreadPoolSlim.Tests", "Reface.ThreadPoolSlim.Tests\Reface.ThreadPoolSlim.Tests.csproj", "{14A8FDA0-A60E-4BC8-9396-83D6BD5ED123}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{0316038D-99B4-42F2-B299-F540C83A4A41}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0316038D-99B4-42F2-B299-F540C83A4A41}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0316038D-99B4-42F2-B299-F540C83A4A41}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14A8FDA0-A60E-4BC8-9396-83D6BD5ED123}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14A8FDA0-A60E-4BC8-9396-83D6BD5ED123}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14A8FDA0-A60E-4BC8-9396-83D6BD5ED123}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14A8FDA0-A60E-4BC8-9396-83D6BD5ED123}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

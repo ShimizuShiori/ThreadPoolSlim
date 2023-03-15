@@ -9,26 +9,32 @@ namespace Reface.ThreadPoolSlim.Tests
 		[TestMethod]
 		public void Submit_ShouldExecutedInDifferentThread_WhenJobsLessThanCoreSize()
 		{
-			FixedThreadPoolSlim threadPool = new FixedThreadPoolSlim(2, 5, 10);
-			string threadName1 = string.Empty;
-			string threadName2 = string.Empty;
-
-			CountdownEvent e = new CountdownEvent(2);
-			threadPool.Submit(s =>
+			using (FixedThreadPoolSlim threadPool = new FixedThreadPoolSlim(2, 5, 10))
+			using (CountdownEvent e = new CountdownEvent(2))
+			using (var pushedEvent = new ManualResetEvent(false))
 			{
-				threadName1 =
-Thread.CurrentThread.Name ?? "";
-				e.Signal();
-			}, 1);
-			threadPool.Submit(s =>
-			{
-				threadName2 =
-Thread.CurrentThread.Name ?? "";
-				e.Signal();
-			}, 2);
+				string threadName1 = string.Empty;
+				string threadName2 = string.Empty;
 
-			e.Wait();
-			Assert.AreNotEqual(threadName1, threadName2);
+				threadPool.Submit(s =>
+				{
+					pushedEvent.WaitOne();
+					threadName1 =
+	Thread.CurrentThread.Name ?? "";
+					e.Signal();
+				}, 1);
+				threadPool.Submit(s =>
+				{
+					pushedEvent.WaitOne();
+					threadName2 =
+	Thread.CurrentThread.Name ?? "";
+					e.Signal();
+				}, 2);
+				pushedEvent.Set();
+
+				e.Wait();
+				Assert.AreNotEqual(threadName1, threadName2);
+			}
 		}
 
 		[TestMethod]

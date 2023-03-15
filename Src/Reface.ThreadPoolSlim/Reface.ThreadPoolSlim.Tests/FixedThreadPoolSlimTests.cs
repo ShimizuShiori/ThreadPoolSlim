@@ -65,18 +65,27 @@ Thread.CurrentThread.Name ?? "";
 			FixedThreadPoolSlim threadPool = new FixedThreadPoolSlim(1, 2, 5);
 			HashSet<string> threadNames = new HashSet<string>();
 
-			int workerCount = 6;
-			CountdownEvent e = new CountdownEvent(workerCount);
-			for (int i = 0; i < workerCount; i++)
-				threadPool.Submit(s =>
+			int workerCount = 7;
+			using (CountdownEvent e = new CountdownEvent(workerCount))
+			using (ManualResetEvent pushedEvent = new ManualResetEvent(false))
+			using (ManualResetEvent firstStartedEvent = new ManualResetEvent(false))
+			{
+				for (int i = 0; i < workerCount; i++)
 				{
-					Thread.Sleep(10);
-					lock (threadNames)
-						threadNames.Add(Thread.CurrentThread.Name ?? "");
-					e.Signal();
-				}, 1);
-
-			e.Wait();
+					if (i != 0)
+						firstStartedEvent.WaitOne();
+					threadPool.Submit(s =>
+					{
+						firstStartedEvent.Set();
+						pushedEvent.WaitOne();
+						lock (threadNames)
+							threadNames.Add(Thread.CurrentThread.Name ?? "");
+						e.Signal();
+					}, i);
+				}
+				pushedEvent.Set();
+				e.Wait();
+			}
 			Assert.AreEqual(2, threadNames.Count);
 		}
 
@@ -131,6 +140,40 @@ Thread.CurrentThread.Name ?? "";
 			e.Wait();
 			Assert.AreEqual(1000, result);
 
+		}
+
+		[TestMethod]
+		public void WaitIdle_WhenOnlyOneCoreThreadIsRunning()
+		{
+			using (var pool = new FixedThreadPoolSlim(1, 2, 2, keepAliveTime: TimeSpan.FromSeconds(5)))
+			{
+				int i = 0;
+				pool.Submit(state =>
+				{
+					i = 1;
+				}, 1);
+
+				pool.WaitIdle();
+				Assert.AreEqual(1, i);
+			}
+		}
+
+
+		[TestMethod]
+		public void WaitIdle_WhenAllWorksRuns()
+		{
+			using (var pool = new FixedThreadPoolSlim(1, 100, 50, keepAliveTime: TimeSpan.FromSeconds(5)))
+			{
+				int v = 0;
+				for (int i = 0; i < 100; i++)
+					pool.Submit(state =>
+					{
+						Interlocked.Increment(ref v);
+					}, 1);
+
+				pool.WaitIdle();
+				Assert.AreEqual(100, v);
+			}
 		}
 	}
 }

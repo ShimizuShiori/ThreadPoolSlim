@@ -7,6 +7,7 @@ namespace Reface.ThreadPoolSlim
 		readonly object extThreadLock = new object();
 		readonly object coreThreadLock = new object();
 		readonly AutoResetEvent hasJobsEvent = new AutoResetEvent(false);
+		readonly AutoResetEvent idleEvent = new AutoResetEvent(false);
 
 		readonly int coreSize;
 		readonly int maxSize;
@@ -15,15 +16,18 @@ namespace Reface.ThreadPoolSlim
 		readonly Queue<(Action<object>, object)> jobs;
 		readonly int maxJobSize;
 		readonly Action fullHandler;
+		readonly string name;
 
 		int runningCoreThreadCount = 0;
 		int runningExtThreadCount = 0;
-		int maxId = 0;
+		int maxCoreId = 0;
+		int maxExtId = 0;
 
 		public FixedThreadPoolSlim(
 			int coreSize,
 			int maxSize,
 			int maxJobSize,
+			string? name = null,
 			TimeSpan? keepAliveTime = null,
 			Func<Thread>? threadFactory = null,
 			Action? fullHandler = null)
@@ -32,11 +36,12 @@ namespace Reface.ThreadPoolSlim
 			this.maxSize = maxSize;
 			this.maxJobSize = maxJobSize;
 			this.jobs = new Queue<(Action<object>, object)>();
+			this.name = name ?? "TheadPool";
 			this.threadFactory = threadFactory ?? new Func<Thread>(() =>
 			 {
-				 var id = Interlocked.Increment(ref maxId);
 				 var t = new Thread(DoJobs);
-				 t.Name = $"worker-{id}";
+				 t.IsBackground = true;
+				 t.Priority = ThreadPriority.Normal;
 				 return t;
 			 });
 			this.fullHandler = fullHandler ?? new Action(() =>
@@ -44,6 +49,16 @@ namespace Reface.ThreadPoolSlim
 				throw new JobQueueIsFullException();
 			});
 			this.keepAliveTime = keepAliveTime ?? TimeSpan.FromSeconds(30);
+		}
+
+		Thread CreateThread(WorkerType workerType)
+		{
+			var thread = this.threadFactory();
+			int id = workerType == WorkerType.Core
+				? Interlocked.Increment(ref this.maxCoreId)
+				: Interlocked.Increment(ref this.maxExtId);
+			thread.Name = $"{name}-{workerType}-{id}";
+			return thread;
 		}
 
 		public void Submit(Action<object> action, object args)
@@ -68,11 +83,11 @@ namespace Reface.ThreadPoolSlim
 				{
 					Action callback = () =>
 					{
-						lock (coreThreadLock)
-							runningCoreThreadCount--;
+						ReduceRunningCount(WorkerType.Core);
+
 					};
-					threadFactory().Start(callback);
-					runningCoreThreadCount++;
+					CreateThread(WorkerType.Core).Start(callback);
+					Interlocked.Increment(ref runningCoreThreadCount);
 					Debug.WriteLine("Core Thread Created");
 					return;
 				}
@@ -88,14 +103,11 @@ namespace Reface.ThreadPoolSlim
 					{
 						Action callback = () =>
 						{
-							lock (extThreadLock)
-								runningExtThreadCount--;
+							ReduceRunningCount(WorkerType.Ext);
 						};
 						jobs.Enqueue((action, args));
-						var t = threadFactory();
-						t.Name = "ext-" + t.Name;
-						t.Start(callback);
-						runningExtThreadCount++;
+						CreateThread(WorkerType.Ext).Start(callback);
+						Interlocked.Increment(ref runningExtThreadCount);
 						Debug.WriteLine("Ext Thread Created");
 						return;
 					}
@@ -104,6 +116,16 @@ namespace Reface.ThreadPoolSlim
 			fullHandler();
 		}
 
+		public void WaitIdle()
+		{
+			this.idleEvent.WaitOne();
+		}
+
+		public void Dispose()
+		{
+			hasJobsEvent.Dispose();
+			idleEvent.Dispose();
+		}
 		void DoJobs(object? obj)
 		{
 			Debug.WriteLine($"[{Thread.CurrentThread.Name}] Started");
@@ -138,6 +160,24 @@ namespace Reface.ThreadPoolSlim
 			Debug.WriteLine($"[{Thread.CurrentThread.Name}] Dead");
 			if (obj is Action callback)
 				callback();
+		}
+
+		void ReduceRunningCount(WorkerType type)
+		{
+			int runningCount = 0;
+			switch (type)
+			{
+				case WorkerType.Core:
+					runningCount = Interlocked.Decrement(ref runningCoreThreadCount) + runningExtThreadCount;
+					break;
+				case WorkerType.Ext:
+					runningCount = Interlocked.Decrement(ref runningExtThreadCount) + runningCoreThreadCount;
+					break;
+				default:
+					break;
+			}
+			if (runningCount == 0)
+				idleEvent.Set();
 		}
 	}
 }

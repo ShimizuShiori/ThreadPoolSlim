@@ -14,14 +14,12 @@ namespace Reface.ThreadPoolSlim.Promises.Tests
 		[TestInitialize]
 		public void Init()
 		{
-			threadPool = new FixedThreadPoolSlim(1, 1, 1, keepAliveTime: TimeSpan.FromSeconds(3));
 			@event = new AutoResetEvent(false);
 		}
 
 		[TestCleanup]
 		public void Dispose()
 		{
-			threadPool.Dispose();
 			@event.Dispose();
 		}
 
@@ -31,7 +29,7 @@ namespace Reface.ThreadPoolSlim.Promises.Tests
 			string? str = null;
 			var p = new Promise<string>((resolve, reject) =>
 			{
-				threadPool.Submit(state => resolve(state.ToString() ?? ""), 10);
+				RunInSubThread(() => resolve("10"));
 			});
 			p.Then(result =>
 			{
@@ -48,7 +46,7 @@ namespace Reface.ThreadPoolSlim.Promises.Tests
 			Exception? ex = null;
 			var p = new Promise<string>((resolve, reject) =>
 			{
-				threadPool.Submit(state => reject(new ApplicationException()), 10);
+				RunInSubThread(() => reject(new ApplicationException()));
 			});
 			p.Catch(e =>
 			{
@@ -89,7 +87,11 @@ namespace Reface.ThreadPoolSlim.Promises.Tests
 			Assert.IsInstanceOfType(ex, typeof(ApplicationException));
 		}
 
-		IThreadPoolSlim threadPool;
 		AutoResetEvent @event;
+
+		void RunInSubThread(Action action)
+		{
+			ThreadPool.QueueUserWorkItem(state => action(), null);
+		}
 	}
 }

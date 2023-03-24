@@ -87,6 +87,86 @@ namespace Reface.ThreadPoolSlim.Promises.Tests
 			Assert.IsInstanceOfType(ex, typeof(ApplicationException));
 		}
 
+		[TestMethod]
+		public void TestReject_Ingored_WhenHasBeenResolved()
+		{
+			string? str = null;
+			Exception? ex = null;
+			var p = new Promise<string>((resolve, reject) =>
+			{
+				resolve("A");
+				reject(new ApplicationException());
+			});
+			p.Then(x =>
+			{
+				str = x;
+			}).Catch(e =>
+			{
+				ex = e;
+			});
+			Assert.IsNull(ex);
+			Assert.AreEqual("A", str);
+		}
+
+		[TestMethod]
+		[DataRow(true)]
+		[DataRow(false)]
+		public void TestThen_MultiThens(bool async)
+		{
+			void ResolveData(Action<string> resolve)
+			{
+				resolve("A");
+				@event.Set();
+			}
+
+			var process = new Action<Action<string>, Action<Exception>>((resolve, reject) =>
+			{
+				if (async)
+					RunInSubThread(() => ResolveData(resolve));
+				else
+					ResolveData(resolve);
+			});
+
+			List<string> list = new List<string>();
+			IPromise<string> promise = new Promise<string>(process);
+			promise.Then(x => list.Add(x));
+			promise.Then(x => list.Add(x));
+			promise.Then(x => list.Add(x));
+			promise.Then(x => list.Add(x));
+			@event.WaitOne();
+			Assert.AreEqual(4, list.Count);
+		}
+
+		[TestMethod]
+		[DataRow(true)]
+		[DataRow(false)]
+		public void TestThen_ChainedThens(bool async)
+		{
+			void ResolveData(Action<string> resolve)
+			{
+				resolve("A");
+				@event.Set();
+			}
+
+			var process = new Action<Action<string>, Action<Exception>>((resolve, reject) =>
+			{
+				if (async)
+					RunInSubThread(() => ResolveData(resolve));
+				else
+					ResolveData(resolve);
+			});
+
+			List<string> list = new List<string>();
+			IPromise<string> promise = new Promise<string>(process);
+			promise
+				.Then(x => list.Add(x))
+				.Then(x => list.Add(x))
+				.Then(x => list.Add(x))
+				.Then(x => list.Add(x));
+			@event.WaitOne();
+			Assert.AreEqual(4, list.Count);
+		}
+
 		AutoResetEvent @event;
 
 		void RunInSubThread(Action action)
